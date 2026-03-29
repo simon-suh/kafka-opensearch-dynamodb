@@ -1,0 +1,12 @@
+# Terraform provider plugins - large binaries, not needed in source control
+.terraform/
+
+# Terraform lock file - can be committed but optional for small projects
+# .terraform.lock.hcl
+
+# State files - contain sensitive infrastructure details
+terraform.tfstate
+terraform.tfstate.backup
+
+# Variable files that may contain sensitive values
+*.tfvars

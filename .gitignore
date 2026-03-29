@@ -1,0 +1,21 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment files - may contain sensitive credentials
+.env
+*.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# VS Code settings
+.vscode/
+
+# Logs
+*.log
+
+# Docker override files
+docker-compose.override.yml
