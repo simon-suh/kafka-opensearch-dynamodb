@@ -1,0 +1,113 @@
+# Defines the version of the Docker Compose file format being used
+version: '3.8'
+
+# Top level key where all services (containers) are defined
+services:
+
+  # --- ZOOKEEPER ---
+  # Zookeeper is required by Kafka to manage broker coordination and metadata
+  zookeeper:
+    # Pinned to specific version — never use 'latest' tag
+    image: confluentinc/cp-zookeeper:7.5.0
+    # Explicit container name — used by other services to reference this container by name instead of localhost
+    container_name: zookeeper
+    environment:
+      # Port that Kafka will use to connect to Zookeeper
+      ZOOKEEPER_CLIENT_PORT: 2181
+      # Heartbeat interval in milliseconds — controls session timeouts
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # --- KAFKA ---
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    # Ensures Zookeeper is started before Kafka
+    depends_on:
+      - zookeeper
+    ports:
+      # Maps host port 9092 to container port 9092 — format is host:container
+      - "9092:9092"
+    environment:
+      # Unique ID for this Kafka broker — relevant in multi-broker setups
+      KAFKA_BROKER_ID: 1
+      # Tells Kafka where to find Zookeeper — uses container name, not localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Address Kafka advertises to clients for connecting — uses container name
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      # Set to 1 because we only have a single Kafka broker in this local setup
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # --- SCHEMA REGISTRY ---
+  # Manages and enforces Avro schemas for Kafka topics
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      # Schema Registry API is accessible on port 8081
+      - "8081:8081"
+    environment:
+      # Hostname used internally by Schema Registry
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      # Tells Schema Registry which Kafka broker to connect to — uses container name
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+
+  # --- OPENSEARCH ---
+  # Search and analytics engine — open source fork of Elasticsearch
+  # Receives data from Kafka and makes it searchable
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch
+    environment:
+      # Runs as a single node cluster — appropriate for local dev
+      - discovery.type=single-node
+      # Prevents memory from being swapped to disk — improves performance
+      - bootstrap.memory_lock=true
+      # Sets minimum and maximum JVM heap size — keeps memory usage predictable
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Disables SSL and authentication — for local dev only, never in production
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        # -1 means unlimited — required when memory lock is enabled
+        soft: -1
+        hard: -1
+    ports:
+      # OpenSearch REST API accessible on port 9200
+      - "9200:9200"
+
+  # --- OPENSEARCH DASHBOARDS ---
+  # Web UI for OpenSearch — nearly identical to Kibana
+  # Used for log searching, index management, and visualizations
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    container_name: opensearch-dashboards
+    depends_on:
+      - opensearch
+    ports:
+      # Dashboard UI accessible in browser at http://localhost:5601
+      - "5601:5601"
+    environment:
+      # Tells Dashboards where to find OpenSearch — uses container name, not localhost
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      # Disables security plugin in the UI — matches OpenSearch security being disabled
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+
+  # --- GRAFANA ---
+  # Metrics and monitoring dashboards
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    ports:
+      # Grafana UI accessible in browser at http://localhost:3000
+      - "3000:3000"
+    environment:
+      # Admin credentials for Grafana UI login — for local dev only
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+
+# Named volumes — persist data between container restarts
+volumes:
+  # Persists Grafana dashboards and settings so they survive container restarts
+  grafana-data:
